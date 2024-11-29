@@ -1,6 +1,5 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const axios = require("axios");
 const dotenv = require("dotenv");
 const path = require("path");
 
@@ -17,8 +16,9 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta3/models/text-bison:generate";
+// Initialize the GoogleGenerativeAI client with your API key
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 app.post("/interview", async (req, res) => {
   const { jobTitle, userResponse, conversationHistory } = req.body;
@@ -30,33 +30,19 @@ app.post("/interview", async (req, res) => {
     The user just responded: "${userResponse}"
     Please provide the next question to ask the user, and adjust to their responses. 
     Conclude with an overall assessment and feedback after 6 questions.
-    `;
+  `;
 
   try {
-    const response = await axios.post(
-      GEMINI_URL,
-      {
-        prompt: { text: prompt }, // Corrected prompt structure
-        maxOutputTokens: 300,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
-        },
-      }
-    );
+    // Generate AI response using GoogleGenerativeAI
+    const result = await model.generateContent(prompt);
+    const aiResponse = result.response.text(); // Get the text response from the AI
 
-    const aiResponse =
-      response.data?.candidates?.[0]?.output ||
-      "AI did not provide a valid response.";
     res.json({ aiResponse });
   } catch (error) {
     console.error("Error occurred during API call:", error); // Log the error details
 
     if (error.response) {
-      // If there's a response from Gemini API
+      // If there's a response from the AI API
       console.error("Google Gemini API response error:", error.response.data);
       res.status(500).json({ error: error.response.data }); // Log the response error
     } else if (error.request) {
@@ -74,4 +60,5 @@ app.post("/interview", async (req, res) => {
   }
 });
 
+// Start the server
 app.listen(3000, () => console.log("Server running on http://localhost:3000"));
