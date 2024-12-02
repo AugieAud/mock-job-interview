@@ -3,19 +3,26 @@ document.getElementById("submitButton").addEventListener("click", async () => {
   const userResponse = document.getElementById("userResponse").value;
   const chatDisplay = document.getElementById("chatDisplay");
 
-  // Display user input
+  // Update chat display with user input
   chatDisplay.innerHTML += `<p><strong>You:</strong> ${userResponse}</p>`;
   document.getElementById("userResponse").value = ""; // Clear input field
+
+  // Build conversation history from displayed messages
+  const conversationHistory = Array.from(chatDisplay.children).map((el) => {
+    const role = el.querySelector("strong").textContent.includes("You")
+      ? "user"
+      : "model";
+    return {
+      role,
+      parts: [{ text: el.textContent.replace(/^.*?:/, "").trim() }],
+    };
+  });
 
   try {
     const response = await fetch("http://localhost:3000/interview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jobTitle,
-        userResponse,
-        conversationHistory: chatDisplay.innerText,
-      }),
+      body: JSON.stringify({ jobTitle, userResponse, conversationHistory }),
     });
 
     const data = await response.json();

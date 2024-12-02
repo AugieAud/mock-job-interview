@@ -1,12 +1,14 @@
+const dotenv = require("dotenv");
+dotenv.config(); // Load environment variables at the start
+
 const express = require("express");
 const bodyParser = require("body-parser");
-const dotenv = require("dotenv");
 const path = require("path");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-dotenv.config();
+console.log("Loaded API Key:", process.env.GEMINI_API_KEY);
 
-// Make sure the API key is set
+// Check for API key
 if (!process.env.GEMINI_API_KEY) {
   console.error(
     "Error: GEMINI_API_KEY is not set in the environment variables."
@@ -14,67 +16,61 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
+// Initialize Google Generative AI client
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// Initialize GoogleGenerativeAI client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-// Create a new chat model instance
-const chat = model.startChat({
-  history: [
-    {
-      role: "user",
-      parts: [{ text: "Hello" }],
-    },
-    {
-      role: "model",
-      parts: [{ text: "Great to meet you. What would you like to know?" }],
-    },
-  ],
-});
-
 app.post("/interview", async (req, res) => {
-  const { jobTitle, userResponse, conversationHistory } = req.body;
+  const {
+    jobTitle,
+    userResponse,
+    conversationHistory: clientHistory,
+  } = req.body;
 
-  // Build the prompt (can still be useful for setting context)
+  // Use the client-supplied conversation history if provided
+  const conversationHistory = clientHistory || [];
+
+  // Add the user's response to the conversation history
+  conversationHistory.push({
+    role: "user",
+    parts: [{ text: userResponse }],
+  });
+
   const prompt = `
-    You are a professional interviewer for the job title: ${jobTitle}.
-    The interview so far:
-    ${conversationHistory}
-    The user just responded: "${userResponse}"
-    Please provide the next question to ask the user, and adjust to their responses. 
-    Conclude with an overall assessment and feedback after 6 questions.
+    You are a professional interviewer. Your role is to interview the user for the job title: "${jobTitle}".
+    The conversation history so far is as follows:
+    ${conversationHistory
+      .map((msg) => `${msg.role}: ${msg.parts[0].text}`)
+      .join("\n")}
+    Please respond with the next interview question based on the user's responses so far.
+    After the sixth question, provide feedback on the user's answers, highlighting their strengths and areas for improvement.
   `;
 
   try {
-    // Send the current conversation history to Gemini model and get the AI response
-    let result = await chat.sendMessage(userResponse); // Send user input to chat
-    const aiResponse = result.response.text(); // Get the response from the model
+    // Use the `gemini-1.5-flash` model
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Send back the AI's response as JSON
-    res.json({ aiResponse });
+    // Generate content using the model
+    const result = await model.generateContent(prompt);
+
+    const aiResponse = result.response.text(); // Extract the AI's response
+
+    // Add the AI's response to the conversation history
+    conversationHistory.push({
+      role: "model",
+      parts: [{ text: aiResponse }],
+    });
+
+    // Send back the AI's response and updated conversation history
+    res.json({ aiResponse, conversationHistory });
   } catch (error) {
-    console.error("Error occurred during API call:", error); // Log the error details
-
-    if (error.response) {
-      // If there's a response from the AI API
-      console.error("Google Gemini API response error:", error.response.data);
-      res.status(500).json({ error: error.response.data }); // Log the response error
-    } else if (error.request) {
-      // If no response is received
-      console.error(
-        "No response received from Google Gemini API:",
-        error.request
-      );
-      res.status(500).json({ error: "No response from AI service" });
-    } else {
-      // General error logging
-      console.error("Unknown error:", error.message);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
+    console.error("Error occurred during API call:", error.message);
+    res.status(500).json({
+      error: "An error occurred while processing your request.",
+    });
   }
 });
 
