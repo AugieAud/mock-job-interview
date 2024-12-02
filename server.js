@@ -2,9 +2,11 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const dotenv = require("dotenv");
 const path = require("path");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 dotenv.config();
 
+// Make sure the API key is set
 if (!process.env.GEMINI_API_KEY) {
   console.error(
     "Error: GEMINI_API_KEY is not set in the environment variables."
@@ -16,13 +18,28 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// Initialize the GoogleGenerativeAI client with your API key
+// Initialize GoogleGenerativeAI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Create a new chat model instance
+const chat = model.startChat({
+  history: [
+    {
+      role: "user",
+      parts: [{ text: "Hello" }],
+    },
+    {
+      role: "model",
+      parts: [{ text: "Great to meet you. What would you like to know?" }],
+    },
+  ],
+});
 
 app.post("/interview", async (req, res) => {
   const { jobTitle, userResponse, conversationHistory } = req.body;
 
+  // Build the prompt (can still be useful for setting context)
   const prompt = `
     You are a professional interviewer for the job title: ${jobTitle}.
     The interview so far:
@@ -33,10 +50,11 @@ app.post("/interview", async (req, res) => {
   `;
 
   try {
-    // Generate AI response using GoogleGenerativeAI
-    const result = await model.generateContent(prompt);
-    const aiResponse = result.response.text(); // Get the text response from the AI
+    // Send the current conversation history to Gemini model and get the AI response
+    let result = await chat.sendMessage(userResponse); // Send user input to chat
+    const aiResponse = result.response.text(); // Get the response from the model
 
+    // Send back the AI's response as JSON
     res.json({ aiResponse });
   } catch (error) {
     console.error("Error occurred during API call:", error); // Log the error details
