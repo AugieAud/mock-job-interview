@@ -25,8 +25,8 @@ This application helps staff members practice job interviews through an AI-power
 1. Clone the repository
 
 ```bash
-git clone [repository-url]
-cd [project-directory]
+git clone https://github.com/AugieAud/mock-job-interview.git
+cd M3-mockInterview
 ```
 
 2. Install dependencies
@@ -39,7 +39,7 @@ npm install
    Create a `.env` file in the root directory and add your Gemini API key:
 
 ```
-GEMINI_API_KEY=your_api_key_here
+GEMINI_API_KEY=AIzaSyBvqIrS0FLOpkmDXJqCmUJAPPAA98Zd49A
 ```
 
 4. Start the application
@@ -84,6 +84,3 @@ npm start
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
-
-[License Type] - see LICENSE.md for details
